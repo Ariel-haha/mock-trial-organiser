@@ -72,6 +72,7 @@
     .badges{display:flex;gap:6px;flex-wrap:wrap}
     .badge{font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;border:1px solid transparent}
     .badge-campus{background:#163f34;color:#fff;border-color:#163f34}
+    .badge-course{background:#c9a44c;color:#3a2e08;border-color:#b8923c}
     .badge-sup{background:#e7f0eb;color:#163f34;border-color:#c0d9c5}
     .badge-mark{background:#f6efda;color:#8a6d1f;border-color:#e0ccaa}
     .badge-none{background:#f1eee6;color:#a0b0a8;border-color:#e3dfd6}
@@ -148,9 +149,10 @@
     };
   }
   function mkSess(day, time, room, campus){
-    return { id: uid(), campus: campus||"", day: day||"", time: time||"", room: room||"", supervisor: "", marker: "", students: [] };
+    return { id: uid(), campus: campus||"", course: "", day: day||"", time: time||"", room: room||"", supervisor: "", marker: "", students: [] };
   }
   var CAMPUSES = ["Bella Vista", "Parramatta"];
+  var COURSES = ["Advanced", "Extension 1"];
 
   var state;
   function load(){
@@ -226,21 +228,25 @@
     function badgesHTML(){
       return '<div class="badges">'
         + (s.campus     ? '<span class="badge badge-campus">'+esc(s.campus)+'</span>'                : '<span class="badge badge-none">No campus</span>')
+        + (s.course     ? '<span class="badge badge-course">'+esc(s.course)+'</span>'                : '<span class="badge badge-none">No course</span>')
         + (s.supervisor ? '<span class="badge badge-sup">Supervisor: '+esc(s.supervisor)+'</span>' : '<span class="badge badge-none">No supervisor</span>')
         + (s.marker     ? '<span class="badge badge-mark">Marker: '+esc(s.marker)+'</span>'         : '<span class="badge badge-none">No marker</span>')
         + '</div>';
     }
-    function campusOptions(){
-      var html = '<option value=""'+(s.campus?'':' selected')+'>Select campus…</option>';
-      CAMPUSES.forEach(function(c){
-        html += '<option value="'+esc(c)+'"'+(s.campus===c?' selected':'')+'>'+esc(c)+'</option>';
+    function selectOptions(list, current, placeholder){
+      var html = '<option value=""'+(current?'':' selected')+'>'+placeholder+'</option>';
+      list.forEach(function(c){
+        html += '<option value="'+esc(c)+'"'+(current===c?' selected':'')+'>'+esc(c)+'</option>';
       });
       return html;
     }
 
     el.innerHTML =
       '<div class="sess-top">'+badgesHTML()+'<button class="x" aria-label="Remove session">×</button></div>'
-      + '<div class="f-row one"><div><label class="lbl">Campus</label><select data-f="campus">'+campusOptions()+'</select></div></div>'
+      + '<div class="f-row">'
+        + '<div><label class="lbl">Campus</label><select data-f="campus">'+selectOptions(CAMPUSES, s.campus, "Select campus…")+'</select></div>'
+        + '<div><label class="lbl">Course</label><select data-f="course">'+selectOptions(COURSES, s.course, "Select course…")+'</select></div>'
+      + '</div>'
       + '<div class="f-row">'
         + '<div><label class="lbl">Day</label><input data-f="day" placeholder="e.g. Saturday" value="'+esc(s.day)+'"></div>'
         + '<div><label class="lbl">Room</label><input data-f="room" placeholder="e.g. Room 1" value="'+esc(s.room)+'"></div>'
@@ -260,7 +266,7 @@
         var f = inp.getAttribute("data-f");
         s[f] = inp.value;
         save();
-        if(f === "campus" || f === "supervisor" || f === "marker"){
+        if(f === "campus" || f === "course" || f === "supervisor" || f === "marker"){
           el.querySelector(".sess-top").innerHTML = badgesHTML() + '<button class="x" aria-label="Remove session">×</button>';
           el.querySelector(".sess-top .x").onclick = removeSelf;
         }
