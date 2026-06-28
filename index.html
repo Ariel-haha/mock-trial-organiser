@@ -68,7 +68,13 @@
 
     /* session cards */
     .sess{border:1.5px solid #dfe5e0;border-radius:14px;padding:16px;background:#f7f4ec;display:flex;flex-direction:column;gap:0}
-    .sess-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .sess-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px}
+    .sess-ctrls{display:flex;align-items:center;gap:2px;flex-shrink:0}
+    .grip{border:1px solid #dfe5e0;background:#fff;color:#6c7b74;font-size:14px;line-height:1;cursor:grab;border-radius:8px;padding:4px 7px;transition:.15s}
+    .grip:hover{border-color:#1f5d4c;background:#e7f0eb;color:#163f34}
+    .grip:active{cursor:grabbing}
+    .sess.dragging{opacity:.45}
+    .sess.drop-target{outline:2px dashed #1f5d4c;outline-offset:3px}
     .badges{display:flex;gap:6px;flex-wrap:wrap}
     .badge{font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;border:1px solid transparent}
     .badge-campus{background:#163f34;color:#fff;border-color:#163f34}
@@ -149,10 +155,11 @@
     };
   }
   function mkSess(day, time, room, campus){
-    return { id: uid(), campus: campus||"", course: "", day: day||"", time: time||"", room: room||"", supervisor: "", marker: "", students: [] };
+    return { id: uid(), campus: campus||"", course: "", day: day||"", date: "", time: time||"", room: room||"", supervisor: "", marker: "", students: [] };
   }
   var CAMPUSES = ["Bella Vista", "Parramatta"];
   var COURSES = ["Advanced", "Extension 1"];
+  var DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 
   var state;
   function load(){
@@ -173,6 +180,23 @@
     var n = 0;
     state.weeks.forEach(function(w){ w.sessions.forEach(function(s){ if(s.students.indexOf(sid) > -1) n++; }); });
     return n;
+  }
+
+  /* ---- drag & drop reordering ---- */
+  var dragging = null; // { w, s }
+  function clearDropMarks(){
+    var els = document.querySelectorAll(".drop-target");
+    for(var i=0;i<els.length;i++){ els[i].classList.remove("drop-target"); }
+  }
+  function moveSessionTo(fromW, fromS, toW, beforeS){
+    if(fromS === beforeS) return;
+    var i = fromW.sessions.indexOf(fromS);
+    if(i < 0) return;
+    fromW.sessions.splice(i, 1);
+    var j = beforeS ? toW.sessions.indexOf(beforeS) : -1;
+    if(j < 0) j = toW.sessions.length;
+    toW.sessions.splice(j, 0, fromS);
+    save(); renderWeeks(); renderRoster();
   }
 
   /* ---- RENDER ROSTER ---- */
@@ -217,6 +241,12 @@
       };
       host.appendChild(div);
       var body = document.getElementById("wb-"+w.week);
+      body.addEventListener("dragover", function(e){ if(dragging){ e.preventDefault(); } });
+      body.addEventListener("drop", function(e){
+        if(!dragging) return;
+        e.preventDefault();
+        moveSessionTo(dragging.w, dragging.s, w, null); // dropped on empty space → end of this week
+      });
       w.sessions.forEach(function(s){ body.appendChild(buildSession(w, s)); });
     });
   }
@@ -241,17 +271,27 @@
       return html;
     }
 
+    function controlsHTML(){
+      return '<div class="sess-ctrls">'
+        + '<button class="grip" title="Drag to reorder" aria-label="Drag to reorder">⠿</button>'
+        + '<button class="x" title="Remove session" aria-label="Remove session">×</button>'
+        + '</div>';
+    }
+
     el.innerHTML =
-      '<div class="sess-top">'+badgesHTML()+'<button class="x" aria-label="Remove session">×</button></div>'
+      '<div class="sess-top">'+badgesHTML()+controlsHTML()+'</div>'
       + '<div class="f-row">'
         + '<div><label class="lbl">Campus</label><select data-f="campus">'+selectOptions(CAMPUSES, s.campus, "Select campus…")+'</select></div>'
         + '<div><label class="lbl">Course</label><select data-f="course">'+selectOptions(COURSES, s.course, "Select course…")+'</select></div>'
       + '</div>'
       + '<div class="f-row">'
-        + '<div><label class="lbl">Day</label><input data-f="day" placeholder="e.g. Saturday" value="'+esc(s.day)+'"></div>'
-        + '<div><label class="lbl">Room</label><input data-f="room" placeholder="e.g. Room 1" value="'+esc(s.room)+'"></div>'
+        + '<div><label class="lbl">Day</label><select data-f="day">'+selectOptions(DAYS, s.day, "Select day…")+'</select></div>'
+        + '<div><label class="lbl">Date</label><input type="date" data-f="date" value="'+esc(s.date)+'"></div>'
       + '</div>'
-      + '<div class="f-row one"><div><label class="lbl">Timing</label><input data-f="time" placeholder="e.g. 9:00 AM – 12:00 PM" value="'+esc(s.time)+'"></div></div>'
+      + '<div class="f-row">'
+        + '<div><label class="lbl">Room</label><input data-f="room" placeholder="e.g. Room 1" value="'+esc(s.room)+'"></div>'
+        + '<div><label class="lbl">Timing</label><input data-f="time" placeholder="e.g. 9:00 AM – 12:00 PM" value="'+esc(s.time)+'"></div>'
+      + '</div>'
       + '<div class="f-assign">'
         + '<div><label class="lbl">Supervisor</label><input data-f="supervisor" placeholder="Name" value="'+esc(s.supervisor)+'"></div>'
         + '<div><label class="lbl">Marker</label><input data-f="marker" placeholder="Name" value="'+esc(s.marker)+'"></div>'
@@ -267,21 +307,53 @@
         s[f] = inp.value;
         save();
         if(f === "campus" || f === "course" || f === "supervisor" || f === "marker"){
-          el.querySelector(".sess-top").innerHTML = badgesHTML() + '<button class="x" aria-label="Remove session">×</button>';
-          el.querySelector(".sess-top .x").onclick = removeSelf;
+          el.querySelector(".sess-top").innerHTML = badgesHTML() + controlsHTML();
+          wireControls();
         }
       };
       inp.addEventListener("input", handler);
       inp.addEventListener("change", handler);
     });
 
-    /* remove session */
+    /* remove + move session */
     function removeSelf(){
       if(w.sessions.length === 1 && !confirm("Remove this session? Week "+w.week+" will have no sessions.")) return;
       w.sessions = w.sessions.filter(function(x){ return x.id !== s.id; });
       save(); renderWeeks(); renderRoster();
     }
-    el.querySelector(".sess-top .x").onclick = removeSelf;
+    function wireControls(){
+      var top = el.querySelector(".sess-top");
+      top.querySelector(".x").onclick = removeSelf;
+      // card only becomes draggable while you hold the grip — keeps form fields usable
+      var grip = top.querySelector(".grip");
+      grip.onmousedown = function(){ el.setAttribute("draggable", "true"); };
+      grip.onmouseup   = function(){ el.removeAttribute("draggable"); };
+    }
+    wireControls();
+
+    /* card-level drag listeners (attached once) */
+    el.addEventListener("dragstart", function(e){
+      dragging = { w: w, s: s };
+      e.dataTransfer.effectAllowed = "move";
+      try{ e.dataTransfer.setData("text/plain", s.id); }catch(_){}
+      setTimeout(function(){ el.classList.add("dragging"); }, 0);
+    });
+    el.addEventListener("dragend", function(){
+      el.classList.remove("dragging"); el.removeAttribute("draggable");
+      clearDropMarks(); dragging = null;
+    });
+    el.addEventListener("dragover", function(e){
+      if(!dragging || dragging.s === s) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = "move";
+      el.classList.add("drop-target");
+    });
+    el.addEventListener("dragleave", function(){ el.classList.remove("drop-target"); });
+    el.addEventListener("drop", function(e){
+      if(!dragging) return;
+      e.preventDefault(); e.stopPropagation();
+      el.classList.remove("drop-target");
+      moveSessionTo(dragging.w, dragging.s, w, s); // insert before this card
+    });
 
     /* assigned list */
     var ul = el.querySelector(".assigned-ul");
