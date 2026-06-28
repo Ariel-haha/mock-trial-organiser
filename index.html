@@ -185,7 +185,7 @@
         { week: 2, sessions: [ mkSess("Saturday", "9:00 AM – 12:00 PM", "Room 1", "Bella Vista") ] }
       ],
       tutorials: [],
-      filters: { location: "", period: "" }
+      filters: { location: "", period: "", day: "" }
     };
   }
   function mkSess(day, time, room, campus){
@@ -205,7 +205,8 @@
       var d = JSON.parse(localStorage.getItem(KEY));
       if(d && d.weeks){
         if(!d.tutorials) d.tutorials = [];
-        if(!d.filters) d.filters = { location: "", period: "" };
+        if(!d.filters) d.filters = { location: "", period: "", day: "" };
+        if(d.filters.day === undefined) d.filters.day = "";
         return d;
       }
     }catch(e){}
@@ -217,6 +218,7 @@
     var f = state.filters || {};
     if(f.location && o.campus !== f.location) return false;
     if(f.period && o.period !== f.period) return false;
+    if(f.day && o.day !== f.day) return false;
     return true;
   }
   function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
@@ -565,22 +567,26 @@
   /* ---- FILTER BAR ---- */
   function renderFilters(){
     var bar = document.getElementById("filterBar");
-    var f = state.filters || { location: "", period: "" };
+    var f = state.filters || { location: "", period: "", day: "" };
     var locOpts = '<option value=""'+(f.location?'':' selected')+'>All locations</option>'
       + CAMPUSES.map(function(c){ return '<option'+(f.location===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('');
     var perOpts = '<option value=""'+(f.period?'':' selected')+'>All sessions</option>'
       + '<option value="AM"'+(f.period==="AM"?' selected':'')+'>AM only</option>'
       + '<option value="PM"'+(f.period==="PM"?' selected':'')+'>PM only</option>';
+    var dayOpts = '<option value=""'+(f.day?'':' selected')+'>All days</option>'
+      + DAYS.map(function(d){ return '<option'+(f.day===d?' selected':'')+'>'+esc(d)+'</option>'; }).join('');
     bar.innerHTML = '<span class="filter-label">Filter</span>'
       + '<select id="fLocation" aria-label="Filter by location">'+locOpts+'</select>'
       + '<select id="fPeriod" aria-label="Filter by AM/PM">'+perOpts+'</select>'
+      + '<select id="fDay" aria-label="Filter by day">'+dayOpts+'</select>'
       + '<span class="spacer"></span>'
-      + ((f.location||f.period) ? '<button class="btn btn-outline btn-sm" id="clearFilter">Clear filter</button>' : '');
+      + ((f.location||f.period||f.day) ? '<button class="btn btn-outline btn-sm" id="clearFilter">Clear filter</button>' : '');
 
     document.getElementById("fLocation").onchange = function(){ state.filters.location = this.value; save(); applyFilter(); };
     document.getElementById("fPeriod").onchange = function(){ state.filters.period = this.value; save(); applyFilter(); };
+    document.getElementById("fDay").onchange = function(){ state.filters.day = this.value; save(); applyFilter(); };
     var clr = document.getElementById("clearFilter");
-    if(clr) clr.onclick = function(){ state.filters = { location: "", period: "" }; save(); applyFilter(); };
+    if(clr) clr.onclick = function(){ state.filters = { location: "", period: "", day: "" }; save(); applyFilter(); };
   }
   function applyFilter(){ renderFilters(); renderWeeks(); renderTutorials(); }
 
